@@ -1,6 +1,6 @@
 # Goroutine Leaks
 
-This is a seminar project by Jakob Vogt, supervised by Professor Martin Sulzmann at Hochschule Karlsruhe - University of Applied Sciences.
+This is a seminar project by Jakob Vogt, supervised by [Professor Martin Sulzmann](https://www.h-ka.de/die-hochschule-karlsruhe/organisation-personen/personen-a-z/person/martin-sulzmann) at Hochschule Karlsruhe - University of Applied Sciences.
 
 ---
 
