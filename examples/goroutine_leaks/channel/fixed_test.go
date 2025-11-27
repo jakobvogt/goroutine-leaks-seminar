@@ -2,7 +2,6 @@ package channel
 
 import (
 	"testing"
-	"time"
 
 	"go.uber.org/goleak"
 )
@@ -18,9 +17,6 @@ func TestFixedHandleRequest(t *testing.T) {
 		t.Fatal("expected error for invalid item")
 	}
 
-	// Give the goroutine time to complete and exit
-	time.Sleep(50 * time.Millisecond)
-
 	// GoLeak verifies and finds that no goroutines are leaked
 }
 
@@ -33,8 +29,6 @@ func TestFixedHandleRequest_ValidItem(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-
-	time.Sleep(50 * time.Millisecond)
 
 	// also no leaks here
 }
