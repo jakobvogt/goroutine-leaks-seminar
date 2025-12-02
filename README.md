@@ -44,10 +44,27 @@ The paper presents both tools as complementary: GoLeak **prevents** new leaks, L
 | **When** | Test time (CI/CD) | Production runtime |
 | **How** | Snapshot goroutines at test end via `runtime.Stack` | Periodic goroutine profiles via pprof |
 | **Purpose** | Prevention - block PRs with leaks | Detection - find leaks that escaped testing |
-| **Precision** | 100% (no false positives) | 72.7% (threshold-based heuristics) |
+| **Precision** | ~100% (see note on false positives below) | 72.7% (threshold-based heuristics) |
 | **Threshold** | Any lingering goroutine | >10K blocked goroutines at same location |
 | **Results (paper)** | 857 found, ~260/year prevented | 24 found, 21 fixed |
 | **Impact** | Stops leaks before merge | Up to 9.2× memory reduction, 34% CPU savings |
+
+**Note on GoLeak False Positives:** The paper claims 100% precision for GoLeak, but this isn't strictly true. Consider:
+
+```go
+func test() {
+    c := make(chan int)
+    go func() { <-c }()  // G2 - receiver
+    go func() { c <- 1 }() // G3 - sender
+}
+```
+
+If the test returns before G3 sends, GoLeak sees G2 blocked and might report a leak. But this isn't a real leak, G2 and G3 can communicate.
+GoLeak doesn't understand channel relationships between goroutines.
+
+In practice, GoLeak has a retry mechanism (~430ms with exponential backoff) that usually prevents this.
+The simple example above passes because G3 gets scheduled within the retry window.
+However, if G3 does slow computation before sending (exceeding ~430ms), GoLeak reports a false positive (see `examples/goroutine_leaks/false_positive`).
 
 
 ## Understanding Deadlocks vs Goroutine Leaks
@@ -492,6 +509,7 @@ LeakProf found 24 leaks in production, of which 21 were fixed:
 | Simple Deadlock | Deadlock | `examples/simple_deadlock/` |
 | Premature Return | Goroutine Leak (GoLeak detects) | `examples/goroutine_leaks/channel/` |
 | Timeout Leak | GoLeak's Limits (test passes, bug remains) | `examples/goroutine_leaks/timeout/` |
+| False Positive | GoLeak's Limits (reports leak that isn't one) | `examples/goroutine_leaks/false_positive/` |
 | Runtime Stack API | GoLeak Internals | `examples/runtime_stack/` |
 | LeakProf Technique | pprof Analysis (how LeakProf works) | `examples/pprof_analysis/` |
 
@@ -539,6 +557,19 @@ go test ./examples/goroutine_leaks/timeout -run TestFixed -v
 ```
 
 Both tests pass, but only the fixed version is actually safe. The leaky version has a bug that only shows up when timeouts occur in production.
+
+False Positive (demonstrates GoLeak reporting a non-leak as a leak):
+```bash
+# This test passes -> GoLeak's retry mechanism handles the simple case
+go test ./examples/goroutine_leaks/false_positive -run TestTwoGoroutinesCommunicating -v
+
+# This test fails -> but it's a false positive!
+# The goroutines can communicate, they just haven't yet (slow sender)
+go test ./examples/goroutine_leaks/false_positive -run TestSlowSenderOverTimeout -v
+```
+
+The false positive example shows two goroutines that share a channel and can communicate with each other.
+GoLeak doesn't understand channel relationships, it just sees blocked goroutines and reports them as leaks if they don't complete within its retry window (~430ms).
 
 ### GoLeak Internals Example
 
